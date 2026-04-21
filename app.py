@@ -4,7 +4,7 @@ import time
 
 # ====== CONFIG PAGE ======
 st.set_page_config(
-    page_title="Chấm Văn AI",
+    page_title="Chấm Văn AI 2.5",
     page_icon="🌿",
     layout="centered"
 )
@@ -12,104 +12,91 @@ st.set_page_config(
 # ====== CUSTOM CSS ======
 st.markdown("""
 <style>
-body {
-    background-color: #f4f9f4;
-}
-
-h1, h2, h3 {
-    color: #2e7d32;
-    text-align: center;
-}
-
+.main { background-color: #f0f7f0; }
+h1 { color: #1b5e20; text-align: center; font-weight: 800; }
 .stButton>button {
-    background: linear-gradient(90deg, #2e7d32, #66bb6a);
+    background: linear-gradient(90deg, #2e7d32, #1b5e20);
     color: white;
-    border-radius: 12px;
-    height: 3em;
+    border-radius: 15px;
+    height: 3.5em;
     font-weight: bold;
     width: 100%;
     border: none;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
-
 .result-box {
     background-color: white;
-    padding: 20px;
-    border-radius: 15px;
-    border-left: 6px solid #2e7d32;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    padding: 25px;
+    border-radius: 20px;
+    border-left: 10px solid #2e7d32;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.05);
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ====== TITLE ======
-st.title("🌿 Trình Chấm Bài Ngữ Văn AI")
-st.caption("Sử dụng Gemini AI hỗ trợ giáo viên chấm bài")
+st.title("🌿 Trình Chấm Văn AI 2.5")
+st.caption("Phiên bản đặc biệt sử dụng Model Gemini 2.5 Flash")
 
-# ====== CHECK API KEY ======
+# ====== KẾT NỐI API ======
 if "GEMINI_API_KEY" not in st.secrets:
-    st.error("❌ Chưa cấu hình GEMINI_API_KEY trong Streamlit Secrets")
+    st.error("❌ Thiếu API Key trong Secrets!")
     st.stop()
 
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-# 👉 đổi model để ổn định hơn
-model = genai.GenerativeModel("gemini-1.5-flash")
+# Ép hệ thống dùng đúng model 2.5
+try:
+    model = genai.GenerativeModel("models/gemini-2.5-flash")
+except:
+    model = genai.GenerativeModel("gemini-2.5-flash")
 
-# ====== SESSION STATE (chống spam) ======
+# ====== QUẢN LÝ THỜI GIAN GỌI API ======
 if "last_call" not in st.session_state:
     st.session_state.last_call = 0
 
-# ====== INPUT UI ======
-st.subheader("📌 Nhập bài làm")
+# ====== GIAO DIỆN NHẬP LIỆU ======
+topic = st.text_input("Đề bài văn", placeholder="Nhập đề bài để AI chấm sát ý hơn...")
+essay = st.text_area("Nội dung bài làm", height=350, placeholder="Dán bài văn của học sinh vào đây...")
 
-topic = st.text_input("Đề bài", placeholder="Ví dụ: Nghị luận về lòng dũng cảm...")
-essay = st.text_area("Bài làm", height=300, placeholder="Dán bài văn vào đây...")
-
-# ====== BUTTON ======
-if st.button("🚀 Chấm bài ngay"):
-
+if st.button("🚀 Bắt đầu chấm với Gemini 2.5"):
     if not essay.strip():
-        st.warning("⚠️ Vui lòng nhập bài làm")
+        st.warning("⚠️ Bạn chưa nhập bài văn mà!")
         st.stop()
 
+    # Kiểm tra hạn mức (Rate limit)
     now = time.time()
-
-    # ====== CHỐNG SPAM ======
-    if now - st.session_state.last_call < 10:
-        wait_time = int(10 - (now - st.session_state.last_call))
-        st.warning(f"⏳ Vui lòng đợi {wait_time}s trước khi chấm tiếp")
+    if now - st.session_state.last_call < 12:
+        st.warning(f"⏳ Hệ thống 2.5 cần nghỉ ngơi một chút. Thử lại sau vài giây nhé!")
         st.stop()
 
     st.session_state.last_call = now
 
-    # ====== PROMPT ======
     prompt = f"""
-    Bạn là giáo viên Ngữ văn giàu kinh nghiệm.
-
+    Bạn là một giáo viên Ngữ văn cấp cao. Hãy chấm bài văn này thật chuyên nghiệp.
     Đề bài: {topic}
-
-    Bài làm:
-    {essay}
-
-    Yêu cầu:
-    1. Chấm điểm (thang 10)
-    2. Nhận xét chi tiết
-    3. Chỉ lỗi chính tả / diễn đạt
-    4. Gợi ý cải thiện
+    Bài làm: {essay}
+    
+    Yêu cầu trả về:
+    1. Điểm số cụ thể (thang 10).
+    2. Nhận xét ưu điểm nổi bật.
+    3. Góp ý về các lỗi diễn đạt, chính tả, bố cục.
+    4. Hướng dẫn học sinh cách nâng cao chất lượng bài viết.
     """
 
     try:
-        with st.spinner("🤖 AI đang chấm bài..."):
-            time.sleep(2)  # giảm spam API
+        with st.spinner("🤖 AI 2.5 đang đọc và phân tích bài viết..."):
             response = model.generate_content(prompt)
-
-        st.success("✅ Chấm bài hoàn tất!")
-
-        st.markdown("### 📊 Kết quả")
+            
+        st.success("✅ Đã hoàn thành!")
+        st.markdown("### 📊 Đánh giá từ Giáo viên AI")
         st.markdown(f"<div class='result-box'>{response.text}</div>", unsafe_allow_html=True)
+        st.balloons()
 
     except Exception as e:
-        if "429" in str(e):
-            st.error("🚫 Bạn gửi quá nhiều request. Vui lòng đợi 1 phút rồi thử lại.")
+        error_msg = str(e)
+        if "404" in error_msg:
+            st.error("❌ Model 2.5 Flash không khả dụng với API hiện tại. Hãy kiểm tra lại quyền truy cập của Key.")
+        elif "429" in error_msg:
+            st.error("🚫 Quá hạn mức! Đợi 1 phút rồi nhấn lại Khang nhé.")
         else:
-            st.error(f"❌ Lỗi hệ thống: {e}")
+            st.error(f"❌ Lỗi: {error_msg}")
