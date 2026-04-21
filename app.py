@@ -1,35 +1,24 @@
 import streamlit as st
 import google.generativeai as genai
+import time
 
-# ====== CẤU HÌNH TRANG ======
+# ====== CONFIG PAGE ======
 st.set_page_config(
     page_title="Chấm Văn AI",
     page_icon="🌿",
     layout="centered"
 )
 
-# ====== CSS CUSTOM ======
+# ====== CUSTOM CSS ======
 st.markdown("""
 <style>
 body {
     background-color: #f4f9f4;
 }
 
-.main {
-    background-color: #f4f9f4;
-}
-
 h1, h2, h3 {
     color: #2e7d32;
     text-align: center;
-}
-
-.stTextInput>div>div>input {
-    border-radius: 10px;
-}
-
-.stTextArea textarea {
-    border-radius: 10px;
 }
 
 .stButton>button {
@@ -52,70 +41,75 @@ h1, h2, h3 {
 </style>
 """, unsafe_allow_html=True)
 
-# ====== HEADER ======
+# ====== TITLE ======
 st.title("🌿 Trình Chấm Bài Ngữ Văn AI")
-st.caption("✨ Sử dụng Gemini 2.5 Flash - Hỗ trợ giáo viên chấm bài nhanh chóng")
+st.caption("Sử dụng Gemini AI hỗ trợ giáo viên chấm bài")
 
-# ====== KIỂM TRA API ======
+# ====== CHECK API KEY ======
 if "GEMINI_API_KEY" not in st.secrets:
-    st.error("⚠️ Bạn chưa cấu hình API Key trong Streamlit Secrets")
+    st.error("❌ Chưa cấu hình GEMINI_API_KEY trong Streamlit Secrets")
     st.stop()
 
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-model = genai.GenerativeModel("gemini-2.5-flash")
 
-# ====== INPUT ======
-with st.container():
-    st.subheader("📌 Nhập thông tin bài làm")
+# 👉 đổi model để ổn định hơn
+model = genai.GenerativeModel("gemini-1.5-flash")
 
-    topic = st.text_input(
-        "Đề bài",
-        placeholder="Ví dụ: Nghị luận về lòng dũng cảm..."
-    )
+# ====== SESSION STATE (chống spam) ======
+if "last_call" not in st.session_state:
+    st.session_state.last_call = 0
 
-    essay = st.text_area(
-        "Bài làm của học sinh",
-        height=300,
-        placeholder="Dán bài văn vào đây..."
-    )
+# ====== INPUT UI ======
+st.subheader("📌 Nhập bài làm")
+
+topic = st.text_input("Đề bài", placeholder="Ví dụ: Nghị luận về lòng dũng cảm...")
+essay = st.text_area("Bài làm", height=300, placeholder="Dán bài văn vào đây...")
 
 # ====== BUTTON ======
-if st.button("🚀 Bắt đầu chấm bài"):
+if st.button("🚀 Chấm bài ngay"):
+
     if not essay.strip():
-        st.warning("⚠️ Bạn chưa nhập bài làm")
+        st.warning("⚠️ Vui lòng nhập bài làm")
         st.stop()
 
-    with st.spinner("🤖 AI đang phân tích bài viết..."):
-        prompt = f"""
-        Bạn là giáo viên Ngữ văn giàu kinh nghiệm.
+    now = time.time()
 
-        Hãy chấm bài văn sau:
+    # ====== CHỐNG SPAM ======
+    if now - st.session_state.last_call < 10:
+        wait_time = int(10 - (now - st.session_state.last_call))
+        st.warning(f"⏳ Vui lòng đợi {wait_time}s trước khi chấm tiếp")
+        st.stop()
 
-        Đề bài: {topic}
+    st.session_state.last_call = now
 
-        Bài làm:
-        {essay}
+    # ====== PROMPT ======
+    prompt = f"""
+    Bạn là giáo viên Ngữ văn giàu kinh nghiệm.
 
-        Yêu cầu:
-        1. Cho điểm (thang 10)
-        2. Nhận xét chi tiết (nội dung, diễn đạt, sáng tạo)
-        3. Chỉ ra lỗi sai (chính tả, ngữ pháp)
-        4. Gợi ý cải thiện cụ thể
+    Đề bài: {topic}
 
-        Trình bày rõ ràng, dễ đọc, có tiêu đề từng phần.
-        """
+    Bài làm:
+    {essay}
 
-        try:
+    Yêu cầu:
+    1. Chấm điểm (thang 10)
+    2. Nhận xét chi tiết
+    3. Chỉ lỗi chính tả / diễn đạt
+    4. Gợi ý cải thiện
+    """
+
+    try:
+        with st.spinner("🤖 AI đang chấm bài..."):
+            time.sleep(2)  # giảm spam API
             response = model.generate_content(prompt)
 
-            st.success("✅ Đã chấm xong!")
+        st.success("✅ Chấm bài hoàn tất!")
 
-            st.markdown("### 📊 Kết quả chấm bài")
-            st.markdown(
-                f"<div class='result-box'>{response.text}</div>",
-                unsafe_allow_html=True
-            )
+        st.markdown("### 📊 Kết quả")
+        st.markdown(f"<div class='result-box'>{response.text}</div>", unsafe_allow_html=True)
 
-        except Exception as e:
-            st.error(f"❌ Lỗi: {e}")
-            st.info("👉 Nếu lỗi 403: hãy kiểm tra lại API Key")
+    except Exception as e:
+        if "429" in str(e):
+            st.error("🚫 Bạn gửi quá nhiều request. Vui lòng đợi 1 phút rồi thử lại.")
+        else:
+            st.error(f"❌ Lỗi hệ thống: {e}")
